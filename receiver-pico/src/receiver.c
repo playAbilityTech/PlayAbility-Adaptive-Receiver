@@ -49,6 +49,7 @@
 #define COMMAND_FORGET_ALL_DEVICES 2
 
 #define BLUETOOTH_ENABLED_FLAG_MASK (1 << 0)
+#define WIFI_ENABLED_FLAG_MASK (1 << 1)
 
 typedef struct __attribute__((packed)) {
     uint8_t config_version;
@@ -99,6 +100,7 @@ config_t config = {
     .our_descriptor_number = 2,
     .wifi_ssid = "",
     .wifi_password = "",
+    .flags = BLUETOOTH_ENABLED_FLAG_MASK,  // Bluetooth enabled by default, WiFi disabled
     .reserved = { 0 },
     .crc = 0,
 };
@@ -352,7 +354,7 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
 int main(void) {
     board_init();
     stdio_init_all();
-    printf("HID Receiver\n");
+    printf("PlayAbility Receiver\n");
     config_init();
     our_descriptor_number = config.our_descriptor_number;
     if (our_descriptor_number >= NOUR_DESCRIPTORS) {
@@ -363,9 +365,13 @@ int main(void) {
     cyw43_arch_init();
 #endif
 #ifdef NETWORK_ENABLED
-    net_init();
+    // Only initialize WiFi if enabled in config
+    if (config.flags & WIFI_ENABLED_FLAG_MASK) {
+        net_init();
+    }
 #endif
 #ifdef BLUETOOTH_ENABLED
+    // Only initialize Bluetooth if enabled in config
     if (config.flags & BLUETOOTH_ENABLED_FLAG_MASK) {
         bt_init();
     }
