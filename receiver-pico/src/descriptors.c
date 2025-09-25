@@ -549,6 +549,9 @@ uint8_t const our_report_descriptor_xac_compat[] = {
     0x81, 0x42,        //   Input (Data,Var,Abs,No Wrap,Linear,Preferred State,Null State)
     0x65, 0x00,        //   Unit (None)
     0x45, 0x00,        //   Physical Maximum (0)
+    0x75, 0x04,        //   Report Size (4)
+    0x95, 0x01,        //   Report Count (1)
+    0x81, 0x01,        //   Input (Const,Array,Abs) -> padding nibble
     0x05, 0x09,        //   Usage Page (Button)
     0x19, 0x01,        //   Usage Minimum (0x01)
     0x29, 0x0C,        //   Usage Maximum (0x0C)
@@ -556,8 +559,24 @@ uint8_t const our_report_descriptor_xac_compat[] = {
     0x25, 0x01,        //   Logical Maximum (1)
     0x75, 0x01,        //   Report Size (1)
     0x95, 0x0C,        //   Report Count (12)
-    0x81, 0x02,        //   Input (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position)
-    0xC0,              // End Collection
+    0x81, 0x02,        //   Input (Data,Var,Abs)
+
+    // Padding to next byte
+    0x75, 0x04,        //   Report Size (4)
+    0x95, 0x01,        //   Report Count (1)
+    0x81, 0x01,        //   Input (Const,Array,Abs)
+
+    // Triggers: LT + RT
+    0x05, 0x02,        //   Usage Page (Simulation Controls)
+    0x09, 0xC5,        //   Usage (Brake -> LT)
+    0x09, 0xC4,        //   Usage (Accelerator -> RT)
+    0x15, 0x00,        //   Logical Minimum (0)
+    0x26, 0xFF, 0x00,  //   Logical Maximum (255)
+    0x75, 0x08,        //   Report Size (8)
+    0x95, 0x02,        //   Report Count (2)
+    0x81, 0x02,        //   Input (Data,Var,Abs)
+
+    0xC0               // End Collection
 };
 
 uint8_t const config_report_descriptor[] = {
