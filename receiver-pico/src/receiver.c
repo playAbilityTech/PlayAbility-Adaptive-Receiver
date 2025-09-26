@@ -97,7 +97,7 @@ bool wifi_connected = false;
 
 config_t config = {
     .config_version = CONFIG_VERSION,
-    .our_descriptor_number = 2,
+    .our_descriptor_number = 7,
     .wifi_ssid = "",
     .wifi_password = "",
     .flags = BLUETOOTH_ENABLED_FLAG_MASK,  // Bluetooth enabled by default, WiFi disabled
