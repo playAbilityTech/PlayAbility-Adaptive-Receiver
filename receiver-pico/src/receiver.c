@@ -48,6 +48,8 @@
 #define COMMAND_PAIR_NEW_DEVICE 1
 #define COMMAND_FORGET_ALL_DEVICES 2
 
+#define BOOTSEL_PIN 23
+
 #define BLUETOOTH_ENABLED_FLAG_MASK (1 << 0)
 #define WIFI_ENABLED_FLAG_MASK (1 << 1)
 
@@ -378,9 +380,15 @@ int main(void) {
 #endif
     tusb_init();
 
+    gpio_init(BOOTSEL_PIN);
+    gpio_set_dir(BOOTSEL_PIN, GPIO_IN);
+    gpio_pull_up(BOOTSEL_PIN);
+
 #if (defined(NETWORK_ENABLED) || defined(BLUETOOTH_ENABLED))
     bool prev_led_state = false;
 #endif
+    bool prev_bootsel_state = true;
+    uint32_t bootsel_press_start = 0;
 
     while (true) {
         tud_task();
@@ -414,6 +422,22 @@ int main(void) {
             or_head = (or_head + 1) % OR_BUFSIZE;
             or_items--;
         }
+        bool bootsel_pressed = !gpio_get(BOOTSEL_PIN);
+        if (bootsel_pressed && !prev_bootsel_state) {
+            bootsel_press_start = time_us_32();
+        } else if (!bootsel_pressed && prev_bootsel_state) {
+            bootsel_press_start = 0;
+        } else if (bootsel_pressed && bootsel_press_start != 0) {
+            uint32_t press_duration = time_us_32() - bootsel_press_start;
+            if (press_duration > 5000000) {
+#ifdef BLUETOOTH_ENABLED
+                bt_set_pairing_mode(true);
+                printf("BOOTSEL held for 5s - pairing mode enabled\n");
+#endif
+                bootsel_press_start = 0;
+            }
+        }
+        prev_bootsel_state = bootsel_pressed;
     }
 
     return 0;
