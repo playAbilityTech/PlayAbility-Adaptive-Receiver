@@ -9,6 +9,9 @@
 #include "hardware/gpio.h"
 #include "hardware/uart.h"
 #include "hardware/watchdog.h"
+#include "hardware/sync.h"
+#include "hardware/structs/ioqspi.h"
+#include "hardware/structs/sio.h"
 
 #include "pico/stdio.h"
 
@@ -47,8 +50,6 @@
 
 #define COMMAND_PAIR_NEW_DEVICE 1
 #define COMMAND_FORGET_ALL_DEVICES 2
-
-#define BOOTSEL_PIN 23
 
 #define BLUETOOTH_ENABLED_FLAG_MASK (1 << 0)
 #define WIFI_ENABLED_FLAG_MASK (1 << 1)
@@ -112,6 +113,26 @@ outgoing_report_t outgoing_reports[OR_BUFSIZE];
 uint8_t or_head = 0;
 uint8_t or_tail = 0;
 uint8_t or_items = 0;
+
+bool __no_inline_not_in_flash_func(get_bootsel_button)() {
+    const uint CS_PIN_INDEX = 1;
+    uint32_t flags = save_and_disable_interrupts();
+    hw_write_masked(&ioqspi_hw->io[CS_PIN_INDEX].ctrl,
+                    GPIO_OVERRIDE_LOW << IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_LSB,
+                    IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_BITS);
+    for (volatile int i = 0; i < 1000; ++i);
+#if PICO_RP2040
+    #define CS_BIT (1u << 1)
+#else
+    #define CS_BIT SIO_GPIO_HI_IN_QSPI_CSN_BITS
+#endif
+    bool button_state = !(sio_hw->gpio_hi_in & CS_BIT);
+    hw_write_masked(&ioqspi_hw->io[CS_PIN_INDEX].ctrl,
+                    GPIO_OVERRIDE_NORMAL << IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_LSB,
+                    IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_BITS);
+    restore_interrupts(flags);
+    return button_state;
+}
 
 void queue_outgoing_report(uint8_t report_id, uint8_t* data, uint8_t len) {
     if (or_items == OR_BUFSIZE) {
@@ -380,10 +401,6 @@ int main(void) {
 #endif
     tusb_init();
 
-    gpio_init(BOOTSEL_PIN);
-    gpio_set_dir(BOOTSEL_PIN, GPIO_IN);
-    gpio_pull_up(BOOTSEL_PIN);
-
 #if (defined(NETWORK_ENABLED) || defined(BLUETOOTH_ENABLED))
     bool prev_led_state = false;
 #endif
@@ -398,6 +415,24 @@ int main(void) {
 #ifdef NETWORK_ENABLED
         net_task();
 #endif
+        bool bootsel_pressed = get_bootsel_button();
+        if (bootsel_pressed && !prev_bootsel_state) {
+            bootsel_press_start = time_us_32();
+            printf("BOOTSEL pressed\n");
+        } else if (!bootsel_pressed && prev_bootsel_state) {
+            printf("BOOTSEL released after %lu us\n", time_us_32() - bootsel_press_start);
+            bootsel_press_start = 0;
+        } else if (bootsel_pressed && bootsel_press_start != 0) {
+            uint32_t press_duration = time_us_32() - bootsel_press_start;
+            if (press_duration > 5000000) {
+#ifdef BLUETOOTH_ENABLED
+                bt_set_pairing_mode(true);
+                printf("BOOTSEL held for 5s - pairing mode enabled\n");
+#endif
+                bootsel_press_start = 0;
+            }
+        }
+        prev_bootsel_state = bootsel_pressed;
 #if (defined(NETWORK_ENABLED) || defined(BLUETOOTH_ENABLED))
         bool led_on = false;
 #endif
@@ -422,22 +457,6 @@ int main(void) {
             or_head = (or_head + 1) % OR_BUFSIZE;
             or_items--;
         }
-        bool bootsel_pressed = !gpio_get(BOOTSEL_PIN);
-        if (bootsel_pressed && !prev_bootsel_state) {
-            bootsel_press_start = time_us_32();
-        } else if (!bootsel_pressed && prev_bootsel_state) {
-            bootsel_press_start = 0;
-        } else if (bootsel_pressed && bootsel_press_start != 0) {
-            uint32_t press_duration = time_us_32() - bootsel_press_start;
-            if (press_duration > 5000000) {
-#ifdef BLUETOOTH_ENABLED
-                bt_set_pairing_mode(true);
-                printf("BOOTSEL held for 5s - pairing mode enabled\n");
-#endif
-                bootsel_press_start = 0;
-            }
-        }
-        prev_bootsel_state = bootsel_pressed;
     }
 
     return 0;
