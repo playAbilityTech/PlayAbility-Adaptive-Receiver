@@ -381,6 +381,8 @@ int main(void) {
 #if (defined(NETWORK_ENABLED) || defined(BLUETOOTH_ENABLED))
     bool prev_led_state = false;
 #endif
+    bool prev_bootsel_state = true;
+    uint32_t bootsel_press_start = 0;
 
     while (true) {
         tud_task();
@@ -390,6 +392,24 @@ int main(void) {
 #ifdef NETWORK_ENABLED
         net_task();
 #endif
+        bool bootsel_pressed = get_bootsel_button();
+        if (bootsel_pressed && !prev_bootsel_state) {
+            bootsel_press_start = time_us_32();
+            printf("BOOTSEL pressed\n");
+        } else if (!bootsel_pressed && prev_bootsel_state) {
+            printf("BOOTSEL released after %lu us\n", time_us_32() - bootsel_press_start);
+            bootsel_press_start = 0;
+        } else if (bootsel_pressed && bootsel_press_start != 0) {
+            uint32_t press_duration = time_us_32() - bootsel_press_start;
+            if (press_duration > 5000000) {
+#ifdef BLUETOOTH_ENABLED
+                bt_set_pairing_mode(true);
+                printf("BOOTSEL held for 5s - pairing mode enabled\n");
+#endif
+                bootsel_press_start = 0;
+            }
+        }
+        prev_bootsel_state = bootsel_pressed;
 #if (defined(NETWORK_ENABLED) || defined(BLUETOOTH_ENABLED))
         bool led_on = false;
 #endif
