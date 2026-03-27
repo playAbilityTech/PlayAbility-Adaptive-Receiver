@@ -3,6 +3,7 @@ on:
   push:
     paths:
       - 'receiver-pico/**'
+  workflow_dispatch:
   workflow_call:
 defaults:
   run:
